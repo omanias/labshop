@@ -52,7 +52,7 @@ export class WhatsappController {
     }
 
     private async sendWhatsappMessage(to: string, text: string) {
-        const url = `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+        const url = `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`;
 
         await axios.post(
             url,
