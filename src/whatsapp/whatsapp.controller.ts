@@ -45,8 +45,9 @@ export class WhatsappController {
 
             // Número de quien envía el mensaje
             let from = message.from as string; // ej: "5493512660233"
-            // Normalizar a formato E.164: +5493512660233
-            from = `+${from.replace(/\D/g, '')}`;
+
+            // Normalizar quitando cualquier cosa rara, PERO SIN AGREGAR +
+            from = from.replace(/\D/g, ''); // -> "5493512660233"
             console.log('[WHATSAPP][INCOMING] From (normalized) =', from);
 
             const text = message.text?.body as string | undefined;
