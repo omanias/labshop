@@ -4,9 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ProductsModule } from './products/products.module';
 import { CartsModule } from './carts/carts.module';
-
 import { GeminiModule } from './gemini/gemini.module';
-
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -18,18 +17,20 @@ import { GeminiModule } from './gemini/gemini.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        host: config.get('DB_HOST'),
-        port: parseInt(config.get('DB_PORT', '5432'), 10),
-        username: config.get('DB_USER'),
-        password: config.get('DB_PASS'),
-        database: config.get('DB_NAME'),
+        host: config.get<string>('DB_HOST'),
+        port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
+        username: config.get<string>('DB_USER'),
+        password: config.get<string>('DB_PASS'),
+        database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true, // ⚠️ true solo en desarrollo
+        synchronize: true,
+        ssl: false,
       }),
     }),
     ProductsModule,
     CartsModule,
     GeminiModule,
+    WhatsappModule,
   ],
 })
 export class AppModule { }
