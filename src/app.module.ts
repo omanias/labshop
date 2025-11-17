@@ -25,6 +25,11 @@ import { TwilioModule } from './whatsapp/twilio.module';
         autoLoadEntities: true,
         synchronize: true,
         ssl: false,
+        logging: false,
+        poolSize: 2,
+        maxQueryExecutionTime: 1000,
+        retryAttempts: 3, // Limitar intentos de reconexión
+        retryDelay: 3000,
       }),
     }),
     ProductsModule,
