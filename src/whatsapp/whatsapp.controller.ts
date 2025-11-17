@@ -66,37 +66,67 @@ export class WhatsappController {
             console.log('[WHATSAPP][OUTGOING] Reply =', finalReply);
 
             // 📤 Responder por WhatsApp
-            await this.sendWhatsappMessage(from, finalReply);
-
-            return { status: 'sent' };
-        } catch (e) {
-            console.error('[WHATSAPP][ERROR]', e);
-            return { status: 'error' };
+            try {
+                await this.sendWhatsappMessage(from, finalReply);
+                console.log('[WHATSAPP][INCOMING] ✅ Mensaje enviado exitosamente');
+                return { status: 'sent' };
+            } catch (sendError: any) {
+                console.error('[WHATSAPP][INCOMING] ❌ Error al enviar:', {
+                    status: sendError.response?.status,
+                    data: sendError.response?.data,
+                    message: sendError.message,
+                });
+                return { status: 'error', sendError: sendError.message };
+            }
+        } catch (e: any) {
+            console.error('[WHATSAPP][ERROR] Error general:', {
+                message: e.message,
+                stack: e.stack,
+            });
+            return { status: 'error', error: e.message };
         }
     }
 
     // 📤 Enviar mensaje de texto por WhatsApp Cloud API
     private async sendWhatsappMessage(to: string, text: string) {
-        const url = `https://graph.facebook.com/v24.0/${process.env.PHONE_NUMBER_ID}/messages`;
+        const url = `https://graph.facebook.com/v22.0/${process.env.PHONE_NUMBER_ID}/messages`;
+
+        // Normalizar el número: quitar + si existe, solo dígitos
+        const normalizedTo = to.replace(/\D/g, '');
 
         console.log('[WHATSAPP][SEND] URL =', url);
-        console.log('[WHATSAPP][SEND] To =', to);
+        console.log('[WHATSAPP][SEND] To =', normalizedTo);
         console.log('[WHATSAPP][SEND] Text =', text);
+        console.log('[WHATSAPP][SEND] Token (primeros 10) =', process.env.WHATSAPP_TOKEN?.slice(0, 10));
+        console.log('[WHATSAPP][SEND] Phone Number ID =', process.env.PHONE_NUMBER_ID);
 
-        await axios.post(
-            url,
-            {
-                messaging_product: 'whatsapp',
-                to,
-                type: 'text',
-                text: { body: text },
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    'Content-Type': 'application/json',
+        try {
+            const response = await axios.post(
+                url,
+                {
+                    messaging_product: 'whatsapp',
+                    to: normalizedTo,
+                    type: 'text',
+                    text: { body: text },
                 },
-            },
-        );
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            console.log('[WHATSAPP][SEND] ✅ Respuesta:', JSON.stringify(response.data, null, 2));
+            return response.data;
+        } catch (error: any) {
+            console.error('[WHATSAPP][SEND] ❌ Error:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message,
+            });
+            throw error;
+        }
     }
 }

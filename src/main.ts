@@ -10,6 +10,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  console.log('[WHATSAPP] TOKEN (inicio) =', process.env.WHATSAPP_TOKEN?.slice(0, 10));
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
