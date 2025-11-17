@@ -4,7 +4,7 @@ import { ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
-  
+
   const app = await NestFactory.create(AppModule, {
     logger: isProduction ? ['error'] : ['log', 'error', 'warn'],
     bufferLogs: true, // Buffer logs para reducir I/O
@@ -23,7 +23,7 @@ async function bootstrap() {
   if (!isProduction) {
     console.log(`[App] Starting on port ${port}`);
   }
-  
+
   await app.listen(port);
 }
 

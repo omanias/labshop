@@ -27,7 +27,7 @@ export class WhatsappController {
     async receiveMessage(@Body() body: any, @Res() res: Response) {
         try {
             const isDev = process.env.NODE_ENV !== 'production';
-            
+
             // Parsear el webhook de Twilio
             const parsedMessage = this.twilioService.parseWebhook(body);
 

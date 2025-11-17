@@ -38,7 +38,7 @@ export class TwilioService {
             if (isDev) {
                 console.log('[TWILIO] Message sent:', message.sid);
             }
-            
+
             return {
                 success: true,
                 sid: message.sid,
