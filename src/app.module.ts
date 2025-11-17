@@ -15,22 +15,26 @@ import { TwilioModule } from './whatsapp/twilio.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST'),
-        port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
-        username: config.get<string>('DB_USER'),
-        password: config.get<string>('DB_PASS'),
-        database: config.get<string>('DB_NAME'),
-        autoLoadEntities: true,
-        synchronize: true,
-        ssl: false,
-        logging: false,
-        poolSize: 2,
-        maxQueryExecutionTime: 1000,
-        retryAttempts: 3, // Limitar intentos de reconexión
-        retryDelay: 3000,
-      }),
+      useFactory: (config: ConfigService) => {
+        const isProduction = process.env.NODE_ENV === 'production';
+        return {
+          type: 'postgres',
+          host: config.get<string>('DB_HOST'),
+          port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
+          username: config.get<string>('DB_USER'),
+          password: config.get<string>('DB_PASS'),
+          database: config.get<string>('DB_NAME'),
+          autoLoadEntities: true,
+          synchronize: !isProduction, // No sincronizar en producción
+          ssl: false,
+          logging: false,
+          poolSize: isProduction ? 1 : 2, // Solo 1 conexión en producción
+          maxQueryExecutionTime: 1000,
+          retryAttempts: 2,
+          retryDelay: 2000,
+          connectTimeoutMS: 5000,
+        };
+      },
     }),
     ProductsModule,
     CartsModule,

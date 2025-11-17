@@ -15,9 +15,10 @@ export class TwilioService {
 
         this.twilioClient = twilio(this.accountSid, this.authToken);
 
-        console.log('[TWILIO] Servicio inicializado ✅');
-        console.log('[TWILIO] Account SID:', this.accountSid?.slice(0, 10));
-        console.log('[TWILIO] WhatsApp Number:', this.whatsappNumber);
+        const isDev = process.env.NODE_ENV !== 'production';
+        if (isDev) {
+            console.log('[TWILIO] Initialized ✅');
+        }
     }
 
     /**
@@ -25,11 +26,8 @@ export class TwilioService {
      */
     async sendWhatsappMessage(to: string, text: string): Promise<any> {
         try {
-            // Normalizar el número: agregar "whatsapp:" al inicio
             const recipientNumber = `whatsapp:+${to.replace(/\D/g, '')}`;
-
-            console.log('[TWILIO][SEND] Enviando a:', recipientNumber);
-            console.log('[TWILIO][SEND] Texto:', text);
+            const isDev = process.env.NODE_ENV !== 'production';
 
             const message = await this.twilioClient.messages.create({
                 from: this.whatsappNumber,
@@ -37,25 +35,23 @@ export class TwilioService {
                 body: text,
             });
 
-            console.log('[TWILIO][SEND] ✅ Mensaje enviado. SID:', message.sid);
+            if (isDev) {
+                console.log('[TWILIO] Message sent:', message.sid);
+            }
+            
             return {
                 success: true,
                 sid: message.sid,
                 status: message.status,
             };
         } catch (error: any) {
-            console.error('[TWILIO][SEND] ❌ Error:', {
-                code: error.code,
-                message: error.message,
-                details: error.details,
-            });
+            console.error('[TWILIO] Send error:', error.message);
             throw error;
         }
     }
 
     /**
      * Parsear webhook de Twilio
-     * Twilio envía los datos como form-urlencoded
      */
     parseWebhook(body: any): {
         from: string;
@@ -63,29 +59,21 @@ export class TwilioService {
         messageId: string;
     } | null {
         try {
-            console.log('[TWILIO][WEBHOOK] Body recibido:', body);
-
-            // Twilio envía los números con "whatsapp:" al inicio
             const from = body.From?.replace('whatsapp:', '') || '';
             const text = body.Body || '';
             const messageId = body.MessageSid || '';
 
             if (!from || !text) {
-                console.warn('[TWILIO][WEBHOOK] Datos incompletos');
                 return null;
             }
 
-            console.log('[TWILIO][WEBHOOK] From:', from);
-            console.log('[TWILIO][WEBHOOK] Text:', text);
-            console.log('[TWILIO][WEBHOOK] MessageSid:', messageId);
-
             return {
-                from: from.replace(/\D/g, ''), // Solo dígitos
+                from: from.replace(/\D/g, ''),
                 text,
                 messageId,
             };
         } catch (error: any) {
-            console.error('[TWILIO][WEBHOOK] ❌ Error al parsear:', error.message);
+            console.error('[TWILIO] Parse error:', error.message);
             return null;
         }
     }
