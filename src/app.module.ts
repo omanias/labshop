@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsModule } from './products/products.module';
 import { CartsModule } from './carts/carts.module';
 import { GeminiModule } from './gemini/gemini.module';
-import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { TwilioModule } from './whatsapp/twilio.module';
 
 @Module({
   imports: [
@@ -30,7 +30,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     ProductsModule,
     CartsModule,
     GeminiModule,
-    WhatsappModule,
+    TwilioModule,
   ],
 })
 export class AppModule { }
