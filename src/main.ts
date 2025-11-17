@@ -7,7 +7,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     logger: isProduction ? ['error'] : ['log', 'error', 'warn'],
-    bufferLogs: true, // Buffer logs para reducir I/O
+    bufferLogs: true,
   });
 
   app.useGlobalPipes(
@@ -15,7 +15,7 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: false,
-      stopAtFirstError: true, // Parar en el primer error de validación
+      stopAtFirstError: true,
     }),
   );
 

@@ -21,9 +21,6 @@ export class TwilioService {
         }
     }
 
-    /**
-     * Enviar mensaje de WhatsApp a través de Twilio
-     */
     async sendWhatsappMessage(to: string, text: string): Promise<any> {
         try {
             const recipientNumber = `whatsapp:+${to.replace(/\D/g, '')}`;
@@ -50,9 +47,6 @@ export class TwilioService {
         }
     }
 
-    /**
-     * Parsear webhook de Twilio
-     */
     parseWebhook(body: any): {
         from: string;
         text: string;
@@ -78,9 +72,6 @@ export class TwilioService {
         }
     }
 
-    /**
-     * Generar respuesta XML para Twilio (sigue esperando respuesta)
-     */
     generateWebhookResponse(): string {
         return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>

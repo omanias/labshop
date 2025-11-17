@@ -11,7 +11,6 @@ export class WhatsappController {
         private readonly twilioService: TwilioService,
     ) { }
 
-    // ✅ GET webhook - Para verificación inicial (compatibilidad)
     @Get()
     verify(
         @Query('hub.mode') mode: string,
@@ -23,13 +22,11 @@ export class WhatsappController {
         return res.status(200).send('OK');
     }
 
-    // ✅ POST webhook - Aquí llegan los mensajes de Twilio WhatsApp
     @Post()
     async receiveMessage(@Body() body: any, @Res() res: Response) {
         try {
             console.log('[WHATSAPP][INCOMING] Body recibido:', JSON.stringify(body, null, 2));
 
-            // Parsear el webhook de Twilio
             const parsedMessage = this.twilioService.parseWebhook(body);
 
             if (!parsedMessage) {
@@ -40,19 +37,13 @@ export class WhatsappController {
 
             const { from, text } = parsedMessage;
 
-            console.log('[WHATSAPP][INCOMING] From =', from);
-            console.log('[WHATSAPP][INCOMING] Text =', text);
 
-            // 🔮 Llamar a Gemini para generar la respuesta
             const reply = await this.geminiService.generateText(text);
             const finalReply = reply || 'No tengo respuesta 😅';
 
-            console.log('[WHATSAPP][OUTGOING] Reply =', finalReply);
 
-            // 📤 Responder por WhatsApp a través de Twilio
             try {
                 await this.twilioService.sendWhatsappMessage(from, finalReply);
-                console.log('[WHATSAPP][INCOMING] ✅ Mensaje enviado exitosamente');
             } catch (sendError: any) {
                 console.error('[WHATSAPP][INCOMING] ❌ Error al enviar:', {
                     message: sendError.message,
@@ -60,7 +51,6 @@ export class WhatsappController {
                 });
             }
 
-            // Responder a Twilio con XML válido
             res.type('text/xml');
             return res.send(this.twilioService.generateWebhookResponse());
         } catch (e: any) {

@@ -78,10 +78,8 @@ Por favor:
     }
 
     async processPurchaseIntent(query: string, quantity: number = 1): Promise<{ response: string; cart: any }> {
-        // Primero obtener recomendaciones de productos
         const { response, products } = await this.queryProducts(query);
 
-        // Detectar si hay intención de compra
         const purchaseKeywords = ['comprar', 'quiero', 'necesito', 'voy a', 'dame', 'llevo', 'agregar', 'añadir', 'llevar'];
         const hasPurchaseIntent = purchaseKeywords.some((keyword) => query.toLowerCase().includes(keyword));
 
@@ -92,7 +90,6 @@ Por favor:
             };
         }
 
-        // Crear carrito automáticamente con los productos recomendados
         const cartItems = products.map((p) => ({
             product_id: p.id,
             qty: quantity,
@@ -125,7 +122,6 @@ ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Prec
 
     async queryCartProducts(cartId: number, query: string): Promise<{ response: string; cart: any }> {
         try {
-            // Obtener el carrito con sus productos
             const cart = await this.cartsService.getCart(cartId);
 
             if (!cart || cart.items.length === 0) {
@@ -135,7 +131,6 @@ ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Prec
                 };
             }
 
-            // Crear contexto con los productos en el carrito
             const cartContext = cart.items
                 .map((item) => {
                     const p = item.product;
@@ -143,12 +138,10 @@ ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Prec
                 })
                 .join('\n');
 
-            // Calcular total del carrito
             const cartTotal = cart.items.reduce((sum, item) => {
                 return sum + parseFloat(item.product.precio_50_u.toString()) * item.qty;
             }, 0);
 
-            // Crear prompt para Gemini
             const prompt = `Eres un asistente de ventas experto. El cliente tiene los siguientes productos en su carrito:
 
 ${cartContext}
@@ -179,7 +172,6 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
         updates?: { product_id: number; qty: number }[],
     ): Promise<{ response: string; cart: any }> {
         try {
-            // Obtener el carrito actual
             const currentCart = await this.cartsService.getCart(cartId);
 
             if (!currentCart) {
@@ -194,24 +186,19 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                 qty: item.qty,
             }))];
 
-            // Si se proporcionan updates explícitos, usarlos
             if (updates && updates.length > 0) {
                 newItems = updates;
             } else {
-                // Si no, intentar interpretar la intención desde el query
                 const queryLower = query.toLowerCase();
 
-                // Detectar intención de eliminar producto
                 const removeMatch = queryLower.match(/elimina|quita|remove|borr[ao].*?(\d+)/);
                 if (removeMatch) {
                     const productId = parseInt(removeMatch[1], 10);
                     newItems = newItems.filter((item) => item.product_id !== productId);
                 }
 
-                // Detectar intención de cambiar cantidad
                 const qtyMatch = queryLower.match(/cambiar?.*?cantidad|de (\d+).*?a (\d+)|(\d+).*?en lugar de|cantidad de (\d+)/);
                 if (qtyMatch) {
-                    // Buscar patrón: "cambiar cantidad de producto X a Y unidades"
                     const detailedMatch = queryLower.match(/product[o]?\s+(\d+).*?(\d+)/);
                     if (detailedMatch) {
                         const productId = parseInt(detailedMatch[1], 10);
@@ -223,7 +210,6 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                     }
                 }
 
-                // Detectar intención de agregar más productos
                 const addMatch = queryLower.match(/agrega|añad[ei]|add.*?(\d+)/);
                 if (addMatch && !queryLower.includes('cantidad')) {
                     const productId = parseInt(addMatch[1], 10);
@@ -236,7 +222,6 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                 }
             }
 
-            // Actualizar el carrito
             const updatedCart = await this.cartsService.updateCart(cartId, { items: newItems });
 
             if (!updatedCart) {
@@ -246,7 +231,6 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                 };
             }
 
-            // Crear respuesta amigable
             const responseText = `
 ✅ **¡Carrito actualizado correctamente!**
 
