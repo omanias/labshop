@@ -24,6 +24,9 @@ import { TwilioModule } from './whatsapp/twilio.module';
           config.get<string>('RDS_HOSTNAME') ||
           'localhost';
 
+        console.log('[DB Connection] Using host:', host);
+        console.log('[DB Connection] NODE_ENV:', config.get('NODE_ENV'));
+
         const port = parseInt(
           config.get<string>('DB_PORT') ??
           config.get<string>('RDS_PORT') ??
@@ -59,12 +62,16 @@ import { TwilioModule } from './whatsapp/twilio.module';
           database,
           autoLoadEntities: true,
           synchronize: !isProduction,
-          ssl: false,
           logging: false,
           poolSize: isProduction ? 1 : 2,
           maxQueryExecutionTime: 1000,
-          retryAttempts: 1,
-          retryDelay: 1000,
+          retryAttempts: 3,
+          retryDelay: 5000,
+          ssl: host.includes('rds.amazonaws.com')
+            ? { rejectUnauthorized: false }
+            : isProduction
+              ? { rejectUnauthorized: false }
+              : false,
         };
       },
     }),
