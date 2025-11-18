@@ -104,20 +104,24 @@ Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
 
         try {
             const cart = await this.cartsService.createCart({ items: cartItems });
+            const cartDetail = cart ? await this.cartsService.getCartDetail(cart.id) : null;
 
             const cartMessage = `
 ✅ **¡Carrito creado exitosamente!**
+
+**ID del Carrito: #${cartDetail?.id}**
 
 He agregado ${products.length} producto(s) a tu carrito:
 ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Precio: $${p.precio_50_u} x ${quantity}`).join('\n')}
 
 **Total de artículos:** ${cartItems.length}
+**Total de compra: $${cartDetail?.total.toFixed(2)}**
 
 ¿Deseas proceder al pago o necesitas hacer cambios en tu carrito?`;
 
             return {
                 response: cartMessage,
-                cart,
+                cart: cartDetail,
             };
         } catch (error) {
             return {
@@ -129,31 +133,27 @@ ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Prec
 
     async queryCartProducts(cartId: number, query: string): Promise<{ response: string; cart: any }> {
         try {
-            const cart = await this.cartsService.getCart(cartId);
+            const cartDetail = await this.cartsService.getCartDetail(cartId);
 
-            if (!cart || cart.items.length === 0) {
+            if (!cartDetail || cartDetail.items.length === 0) {
                 return {
                     response: 'Tu carrito está vacío. ¿Qué productos te gustaría agregar?',
                     cart: null,
                 };
             }
 
-            const cartContext = cart.items
+            const cartContext = cartDetail.items
                 .map((item) => {
-                    const p = item.product;
-                    return `- ID: ${p.id} | ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Cantidad: ${item.qty} | Precio unitario: $${p.precio_50_u}`;
+                    return `- Producto ID: ${item.productId} | ${item.product.tipo_prenda} | Talla: ${item.product.talla} | Color: ${item.product.color} | Cantidad: ${item.qty} | Precio unitario: $${item.product.precio_unitario} | Subtotal: $${item.subtotal}`;
                 })
                 .join('\n');
-
-            const cartTotal = cart.items.reduce((sum, item) => {
-                return sum + parseFloat(item.product.precio_50_u.toString()) * item.qty;
-            }, 0);
 
             const prompt = `Eres un asistente de ventas experto. El cliente tiene los siguientes productos en su carrito:
 
 ${cartContext}
 
-**Total del carrito: $${cartTotal.toFixed(2)}**
+**ID del Carrito: #${cartDetail.id}**
+**Total del carrito: $${cartDetail.total.toFixed(2)}**
 
 El cliente pregunta: "${query}"
 
@@ -163,7 +163,7 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
 
             return {
                 response,
-                cart,
+                cart: cartDetail,
             };
         } catch (error) {
             return {
@@ -179,7 +179,7 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
         updates?: { product_id: number; qty: number }[],
     ): Promise<{ response: string; cart: any }> {
         try {
-            const currentCart = await this.cartsService.getCart(cartId);
+            const currentCart = await this.cartsService.getCartDetail(cartId);
 
             if (!currentCart) {
                 return {
@@ -189,7 +189,7 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
             }
 
             let newItems = [...currentCart.items.map((item) => ({
-                product_id: item.product.id,
+                product_id: item.productId,
                 qty: item.qty,
             }))];
 
@@ -230,6 +230,7 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
             }
 
             const updatedCart = await this.cartsService.updateCart(cartId, { items: newItems });
+            const updatedCartDetail = await this.cartsService.getCartDetail(cartId);
 
             if (!updatedCart) {
                 return {
@@ -241,16 +242,18 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
             const responseText = `
 ✅ **¡Carrito actualizado correctamente!**
 
-**Tu carrito ahora contiene:**
-${updatedCart.items.map((item) => `- ${item.product.tipo_prenda} (${item.product.color}) - Cantidad: ${item.qty} - $${parseFloat(item.product.precio_50_u.toString()) * item.qty}`).join('\n')}
+**ID del Carrito: #${updatedCartDetail.id}**
 
-**Total: $${updatedCart.items.reduce((sum, item) => sum + parseFloat(item.product.precio_50_u.toString()) * item.qty, 0).toFixed(2)}**
+**Tu carrito ahora contiene:**
+${updatedCartDetail.items.map((item) => `- ${item.product.tipo_prenda} (${item.product.color}) - Cantidad: ${item.qty} - $${item.subtotal.toFixed(2)}`).join('\n')}
+
+**Total: $${updatedCartDetail.total.toFixed(2)}**
 
 ¿Hay algo más que quieras modificar?`;
 
             return {
                 response: responseText,
-                cart: updatedCart,
+                cart: updatedCartDetail,
             };
         } catch (error) {
             return {

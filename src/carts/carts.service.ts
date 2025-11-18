@@ -1,4 +1,3 @@
-// src/carts/carts.service.ts
 import {
     BadRequestException,
     Injectable,
@@ -84,7 +83,6 @@ export class CartsService {
             throw new NotFoundException('Cart not found');
         }
 
-        // Borrar todos los items actuales
         await this.cartItemRepo.delete({ cartId: id });
 
         const positiveItems = dto.items.filter((i) => i.qty > 0);
@@ -100,7 +98,6 @@ export class CartsService {
                 throw new NotFoundException('Some products not found');
             }
 
-            // Validar disponibilidad
             for (const item of positiveItems) {
                 const product = products.find((p) => p.id === item.product_id);
                 if (!product || !product.disponible) {
@@ -142,5 +139,118 @@ export class CartsService {
         }
 
         return cart;
+    }
+
+    async getCartDetail(id: number) {
+        const cart = await this.cartRepo.findOne({
+            where: { id },
+            relations: ['items', 'items.product'],
+        });
+
+        if (!cart) {
+            throw new NotFoundException('Cart not found');
+        }
+
+        const itemsDetail = cart.items.map((item) => {
+            const subtotal = Number(item.product.precio_50_u) * item.qty;
+            return {
+                id: item.id,
+                productId: item.productId,
+                product: {
+                    id: item.product.id,
+                    tipo_prenda: item.product.tipo_prenda,
+                    talla: item.product.talla,
+                    color: item.product.color,
+                    precio_unitario: Number(item.product.precio_50_u),
+                    cantidad_disponible: item.product.cantidad_disponible,
+                },
+                qty: item.qty,
+                subtotal: subtotal,
+            };
+        });
+
+        const total = itemsDetail.reduce((sum, item) => sum + item.subtotal, 0);
+
+        return {
+            id: cart.id,
+            createdAt: cart.createdAt,
+            updatedAt: cart.updatedAt,
+            items: itemsDetail,
+            total: total,
+            itemCount: itemsDetail.length,
+        };
+    }
+
+    async updateCartItem(
+        cartId: number,
+        itemId: number,
+        dto: { qty: number },
+    ) {
+        const cart = await this.cartRepo.findOne({
+            where: { id: cartId },
+            relations: ['items'],
+        });
+
+        if (!cart) {
+            throw new NotFoundException('Cart not found');
+        }
+
+        const item = await this.cartItemRepo.findOne({
+            where: { id: itemId, cartId },
+            relations: ['product'],
+        });
+
+        if (!item) {
+            throw new NotFoundException('Item not found in cart');
+        }
+
+        // Validar stock
+        if (item.product.cantidad_disponible < dto.qty) {
+            throw new BadRequestException(
+                `Insufficient stock. Available: ${item.product.cantidad_disponible}`,
+            );
+        }
+
+        item.qty = dto.qty;
+        await this.cartItemRepo.save(item);
+
+        return this.getCartDetail(cartId);
+    }
+
+    async removeCartItem(cartId: number, itemId: number) {
+        const cart = await this.cartRepo.findOne({
+            where: { id: cartId },
+            relations: ['items'],
+        });
+
+        if (!cart) {
+            throw new NotFoundException('Cart not found');
+        }
+
+        const item = await this.cartItemRepo.findOne({
+            where: { id: itemId, cartId },
+        });
+
+        if (!item) {
+            throw new NotFoundException('Item not found in cart');
+        }
+
+        await this.cartItemRepo.delete({ id: itemId });
+
+        return this.getCartDetail(cartId);
+    }
+
+    async deleteCart(id: number) {
+        const cart = await this.cartRepo.findOne({
+            where: { id },
+        });
+
+        if (!cart) {
+            throw new NotFoundException('Cart not found');
+        }
+
+        await this.cartRepo.delete({ id });
+
+        return { message: 'Cart deleted successfully', id };
     }
 }
