@@ -20,7 +20,8 @@ export class Cart {
     updatedAt: Date;
 
     @OneToMany(() => CartItem, (item) => item.cart, {
-        cascade: true,
+        cascade: ['insert', 'update', 'remove'],
+        eager: false,
     })
     items: CartItem[];
 }

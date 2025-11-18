@@ -57,18 +57,24 @@ export class CartsService {
             }
         }
 
-        const cart = this.cartRepo.create({
-            items: positiveItems.map((i) =>
-                this.cartItemRepo.create({
-                    productId: i.product_id,
-                    qty: i.qty,
-                }),
-            ),
-        });
+        // Create cart first
+        const cart = this.cartRepo.create();
+        const savedCart = await this.cartRepo.save(cart);
 
-        const saved = await this.cartRepo.save(cart);
+        // Create and save cart items with cartId
+        const itemsToAdd = positiveItems.map((i) =>
+            this.cartItemRepo.create({
+                cartId: savedCart.id,
+                productId: i.product_id,
+                qty: i.qty,
+            }),
+        );
+
+        await this.cartItemRepo.save(itemsToAdd);
+
+        // Return the saved cart with all relations
         return this.cartRepo.findOne({
-            where: { id: saved.id },
+            where: { id: savedCart.id },
             relations: ['items', 'items.product'],
         });
     }

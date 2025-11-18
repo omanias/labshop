@@ -106,6 +106,14 @@ Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
             const cart = await this.cartsService.createCart({ items: cartItems });
             const cartDetail = cart ? await this.cartsService.getCartDetail(cart.id) : null;
 
+            if (!cartDetail) {
+                console.error('[GEMINI] Cart created but could not retrieve details');
+                return {
+                    response: '❌ Error creating cart. Please try again.',
+                    cart: null,
+                };
+            }
+
             const cartMessage = `
 ✅ **¡Carrito creado exitosamente!**
 
@@ -124,8 +132,9 @@ ${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Prec
                 cart: cartDetail,
             };
         } catch (error) {
+            console.error('[GEMINI] Error creating cart:', error.message);
             return {
-                response: `Hubo un error al crear tu carrito: ${error.message}`,
+                response: `❌ Error al crear tu carrito: ${error.message}`,
                 cart: null,
             };
         }
@@ -179,6 +188,8 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
         updates?: { product_id: number; qty: number }[],
     ): Promise<{ response: string; cart: any }> {
         try {
+            console.log('[GEMINI] Editing cart:', { cartId, query });
+
             const currentCart = await this.cartsService.getCartDetail(cartId);
 
             if (!currentCart) {
@@ -187,6 +198,14 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                     cart: null,
                 };
             }
+
+            console.log('[GEMINI] Current cart items:', currentCart.items.map(i => ({
+                productId: i.productId,
+                tipo_prenda: i.product.tipo_prenda,
+                color: i.product.color,
+                talla: i.product.talla,
+                qty: i.qty
+            })));
 
             let newItems = [...currentCart.items.map((item) => ({
                 product_id: item.productId,
@@ -198,10 +217,101 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
             } else {
                 const queryLower = query.toLowerCase();
 
-                const removeMatch = queryLower.match(/elimina|quita|remove|borr[ao].*?(\d+)/);
-                if (removeMatch) {
-                    const productId = parseInt(removeMatch[1], 10);
-                    newItems = newItems.filter((item) => item.product_id !== productId);
+                // Check for removal requests
+                const removeKeywords = ['elimina', 'quita', 'remove', 'borra', 'borrar', 'delete', 'saca', 'quito', 'elimino', 'sacá'];
+                const isRemoveRequest = removeKeywords.some(keyword => queryLower.includes(keyword));
+
+                if (isRemoveRequest) {
+                    console.log('[GEMINI] Remove request detected');
+
+                    // Try to match by product ID first
+                    const idMatch = queryLower.match(/(?:id|producto|prenda)[\s:]*(\d+)/);
+                    if (idMatch) {
+                        const productId = parseInt(idMatch[1], 10);
+                        console.log('[GEMINI] Removing by product ID:', productId);
+                        newItems = newItems.filter((item) => item.product_id !== productId);
+                    } else {
+                        // Try to match by product description (tipo_prenda, color, talla)
+                        console.log('[GEMINI] Attempting to match by description');
+
+                        for (const cartItem of currentCart.items) {
+                            const product = cartItem.product;
+                            const productLower = product.tipo_prenda.toLowerCase();
+                            const colorLower = product.color.toLowerCase();
+                            const tallaLower = product.talla.toLowerCase();
+
+                            console.log('[GEMINI] Checking match:', {
+                                query: queryLower,
+                                tipo_prenda: productLower,
+                                color: colorLower,
+                                talla: tallaLower
+                            });
+
+                            // Check if product type and at least one more attribute match
+                            const tipoMatches = queryLower.includes(productLower);
+                            const colorMatches = queryLower.includes(colorLower);
+                            const tallaMatches = queryLower.includes(tallaLower);
+
+                            if (tipoMatches && (colorMatches || tallaMatches)) {
+                                console.log('[GEMINI] Match found! Removing product ID:', product.id);
+                                newItems = newItems.filter((item) => item.product_id !== product.id);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Check for quantity change requests
+                const quantityKeywords = ['cambiar', 'cantidad', 'actualiz', 'más', 'menos', 'aumenta', 'disminuye', 'reduce'];
+                const isQuantityRequest = quantityKeywords.some(keyword => queryLower.includes(keyword));
+
+                if (isQuantityRequest) {
+                    console.log('[GEMINI] Quantity change request detected');
+
+                    // Look for pattern like "de X a Y" or just a number
+                    const quantityPatterns = [
+                        /de\s+(\d+)\s+a\s+(\d+)/,  // "de 2 a 3"
+                        /cantidad\s+(\d+)/,        // "cantidad 2"
+                        /(\d+)\s+unidad/,          // "2 unidades"
+                        /cambiar.*?(\d+)/,         // "cambiar 2"
+                        /actualiz.*?(\d+)/,        // "actualizar 2"
+                    ];
+
+                    let newQuantity: number | null = null;
+                    let isRangeMatch = false;
+
+                    for (const pattern of quantityPatterns) {
+                        const match = queryLower.match(pattern);
+                        if (match) {
+                            if (match.length === 3 && pattern.source.includes('de')) {
+                                // Range pattern: de X a Y
+                                newQuantity = parseInt(match[2], 10);
+                                isRangeMatch = true;
+                                break;
+                            } else if (match.length === 2) {
+                                // Single number pattern
+                                newQuantity = parseInt(match[1], 10);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (newQuantity && newQuantity > 0) {
+                        // Try to match product by description
+                        for (const cartItem of currentCart.items) {
+                            const product = cartItem.product;
+
+                            if (queryLower.includes(product.tipo_prenda.toLowerCase()) ||
+                                queryLower.includes(product.color.toLowerCase())) {
+                                console.log('[GEMINI] Quantity match found for product ID:', product.id, 'New qty:', newQuantity);
+                                const itemIndex = newItems.findIndex((item) => item.product_id === product.id);
+                                if (itemIndex >= 0) {
+                                    newItems[itemIndex].qty = newQuantity;
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
 
                 const qtyMatch = queryLower.match(/cambiar?.*?cantidad|de (\d+).*?a (\d+)|(\d+).*?en lugar de|cantidad de (\d+)/);
@@ -228,6 +338,8 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                     }
                 }
             }
+
+            console.log('[GEMINI] New items after processing:', newItems);
 
             const updatedCart = await this.cartsService.updateCart(cartId, { items: newItems });
             const updatedCartDetail = await this.cartsService.getCartDetail(cartId);
@@ -256,6 +368,7 @@ ${updatedCartDetail.items.map((item) => `- ${item.product.tipo_prenda} (${item.p
                 cart: updatedCartDetail,
             };
         } catch (error) {
+            console.error('[GEMINI] Error editing cart:', error);
             return {
                 response: `Error al actualizar tu carrito: ${error.message}`,
                 cart: null,
