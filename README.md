@@ -209,6 +209,8 @@ npm start
 
 ```
 +1 (415) 523-8886
+OR
+with code join captain-tired
 ```
 
 ## 👨‍💻 Author
