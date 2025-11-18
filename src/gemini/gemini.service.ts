@@ -29,19 +29,26 @@ export class GeminiService {
     async queryProducts(query: string): Promise<{ response: string; products: Product[] }> {
         const allProducts = await this.productsService.findAll();
 
+        if (allProducts.length === 0) {
+            return {
+                response: 'Disculpa, en este momento no tengo productos disponibles en el catálogo.',
+                products: [],
+            };
+        }
+
         const productsContext = allProducts
             .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precio 50u: $${p.precio_50_u} | Disponible: ${p.disponible}`)
             .join('\n');
 
-        const enhancedPrompt = `Eres un asistente de ventas experto. Aquí está el catálogo de productos disponibles:
+        const enhancedPrompt = `Eres un asistente de ventas BREVE. Aquí está el catálogo de productos disponibles:
 
 ${productsContext}
 
 El cliente pregunta: "${query}"
 
-Por favor:
-1. Analiza la pregunta y recomienda productos relevantes del catálogo anterior
-2. Explica por qué son recomendados
+Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
+1. Recomienda productos relevantes del catálogo
+2. Una breve explicación (1-2 líneas)
 3. AL FINAL, incluye esta línea exactamente: "PRODUCT_IDS: [id1, id2, id3, ...]" con los IDs de los productos recomendados.`;
 
         const response = await this.generateText(enhancedPrompt);

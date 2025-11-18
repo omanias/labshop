@@ -40,12 +40,21 @@ export class TwilioController {
             let finalReply = response || 'No tengo respuesta 😅';
 
             if (products && products.length > 0) {
-                finalReply += '\n\n📦 Productos disponibles:\n';
-                products.forEach((p) => {
-                    finalReply += `• ${p.tipo_prenda} (${p.talla}) - Color: ${p.color}\n  Precio: $${p.precio_50_u}\n`;
+                finalReply += '\n\n📦 ';
+                products.forEach((p, i) => {
+                    if (i < 3) { // Máximo 3 productos
+                        finalReply += `${p.tipo_prenda} ${p.talla} (${p.color}) $${p.precio_50_u} | `;
+                    }
                 });
+                finalReply = finalReply.slice(0, -3); // Remover último " | "
             }
 
+            // Limitar a 1500 caracteres para Twilio
+            if (finalReply.length > 1500) {
+                finalReply = finalReply.substring(0, 1497) + '...';
+            }
+
+            console.log('[CONTROLLER] Mensaje final a enviar:', finalReply);
 
             try {
                 await this.twilioService.sendWhatsappMessage(from, finalReply);
