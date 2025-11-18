@@ -42,7 +42,6 @@ export class CartsService {
             throw new NotFoundException('Some products not found');
         }
 
-        // Validar disponibilidad
         for (const item of positiveItems) {
             const product = products.find((p) => p.id === item.product_id);
             if (!product || !product.disponible) {
@@ -57,11 +56,9 @@ export class CartsService {
             }
         }
 
-        // Create cart first
         const cart = this.cartRepo.create();
         const savedCart = await this.cartRepo.save(cart);
 
-        // Create and save cart items with cartId
         const itemsToAdd = positiveItems.map((i) =>
             this.cartItemRepo.create({
                 cartId: savedCart.id,
@@ -72,7 +69,6 @@ export class CartsService {
 
         await this.cartItemRepo.save(itemsToAdd);
 
-        // Return the saved cart with all relations
         return this.cartRepo.findOne({
             where: { id: savedCart.id },
             relations: ['items', 'items.product'],
@@ -210,7 +206,6 @@ export class CartsService {
             throw new NotFoundException('Item not found in cart');
         }
 
-        // Validar stock
         if (item.product.cantidad_disponible < dto.qty) {
             throw new BadRequestException(
                 `Insufficient stock. Available: ${item.product.cantidad_disponible}`,
@@ -241,7 +236,7 @@ export class CartsService {
             throw new NotFoundException('Item not found in cart');
         }
 
-        await this.cartItemRepo.delete({ id: itemId });
+        await this.cartItemRepo.delete({ id: itemId, cartId });
 
         return this.getCartDetail(cartId);
     }
