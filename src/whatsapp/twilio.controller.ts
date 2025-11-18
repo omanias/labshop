@@ -1,11 +1,10 @@
-// src/whatsapp/whatsapp.controller.ts
 import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { GeminiService } from '../gemini/gemini.service';
 import { TwilioService } from './twilio.service';
 
 @Controller('webhook')
-export class WhatsappController {
+export class TwilioController {
     constructor(
         private readonly geminiService: GeminiService,
         private readonly twilioService: TwilioService,
@@ -37,9 +36,15 @@ export class WhatsappController {
 
             const { from, text } = parsedMessage;
 
+            const { response, products } = await this.geminiService.queryProducts(text);
+            let finalReply = response || 'No tengo respuesta 😅';
 
-            const reply = await this.geminiService.generateText(text);
-            const finalReply = reply || 'No tengo respuesta 😅';
+            if (products && products.length > 0) {
+                finalReply += '\n\n📦 Productos disponibles:\n';
+                products.forEach((p) => {
+                    finalReply += `• ${p.tipo_prenda} (${p.talla}) - Color: ${p.color}\n  Precio: $${p.precio_50_u}\n`;
+                });
+            }
 
 
             try {

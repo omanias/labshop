@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from "@nestjs/common";
+import * as bodyParser from 'body-parser'
 
 async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -9,6 +10,9 @@ async function bootstrap() {
     logger: isProduction ? ['error'] : ['log', 'error', 'warn'],
     bufferLogs: true,
   });
+
+  app.use(bodyParser.urlencoded({ extended: false }));
+  app.use(bodyParser.json());
 
   app.useGlobalPipes(
     new ValidationPipe({
