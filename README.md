@@ -137,20 +137,6 @@ TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_WHATSAPP_NUMBER=whatsapp:+1234567890
 
-# AWS RDS (if using AWS)
-RDS_HOSTNAME=your_rds_hostname
-RDS_PORT=5432
-RDS_DB_NAME=labshop
-RDS_USERNAME=admin
-RDS_PASSWORD=your_password
-```
-
-4. **Initialize the database**
-```bash
-# Make sure PostgreSQL is running
-psql -U postgres
-CREATE DATABASE labshop;
-```
 
 ## 🛠️ Available Commands
 
@@ -164,42 +150,6 @@ npm run start:debug
 
 # Start normally
 npm start
-```
-
-### Production
-```bash
-# Build the project
-npm run build
-
-# Run in production mode
-npm run start:prod
-```
-
-### Testing
-```bash
-# Run unit tests
-npm test
-
-# Run tests in watch mode
-npm test:watch
-
-# Run tests with coverage
-npm test:cov
-
-# Run E2E tests
-npm run test:e2e
-
-# Run E2E tests in debug mode
-npm run test:debug
-```
-
-### Linting & Formatting
-```bash
-# Run linting (ESLint)
-npm run lint
-
-# Format code (Prettier)
-npm run format
 ```
 
 ## 📚 Main Endpoints
@@ -238,179 +188,11 @@ npm run format
 | POST | `/whatsapp/send` | Send WhatsApp message |
 | POST | `/whatsapp/webhook` | Webhook for incoming messages |
 
-## 🗄️ Database Entities
+## End-to-End Message Flow: WhatsApp → NestJS → Gemini AI
+![Diagram](./src/assets/diagram.png)
 
-### Product
-```typescript
-{
-  id: number (Primary Key)
-  tipo_prenda: string
-  categoria: string
-  color: string
-  descripcion: string
-  precio: number
-  stock: number
-  createdAt: Date
-  updatedAt: Date
-}
-```
-
-### Cart
-```typescript
-{
-  id: number (Primary Key)
-  customer_email: string
-  total: number
-  status: string
-  items: CartItem[]
-  createdAt: Date
-  updatedAt: Date
-}
-```
-
-### CartItem
-```typescript
-{
-  id: number (Primary Key)
-  cart_id: number (Foreign Key)
-  product_id: number (Foreign Key)
-  quantity: number
-  price: number
-  product: Product
-  cart: Cart
-}
-```
-
-## 🔧 Technologies Used
-
-### Backend Framework
-- **NestJS** - Progressive Node.js framework
-- **Express** - HTTP server
-
-### Language
-- **TypeScript** - Typed language
-
-### Database
-- **PostgreSQL** - Database management system
-- **TypeORM** - ORM for TypeScript
-
-### Validation
-- **class-validator** - Class validation
-- **class-transformer** - Class transformation
-
-### External APIs
-- **Google Gemini** - Artificial Intelligence
-- **Twilio** - WhatsApp service
-- **Axios** - HTTP client
-
-### Testing
-- **Jest** - Testing framework
-- **Supertest** - HTTP testing
-
-### Development Tools
-- **ESLint** - Linting
-- **Prettier** - Code formatter
-- **SWC** - Fast compiler
-
-## 📖 Development Guide
-
-### Create a New Module
-
-1. Generate module with NestJS CLI:
-```bash
-nest g module module-name
-```
-
-2. Generate controller:
-```bash
-nest g controller module-name
-```
-
-3. Generate service:
-```bash
-nest g service module-name
-```
-
-4. Create DTOs in `src/module-name/dto/`
-
-5. Import module in `app.module.ts`
-
-### Add a New Entity
-
-1. Create file `src/entities/new-entity.entity.ts`
-2. Decorate with `@Entity()`
-3. Import in `app.module.ts` with `TypeOrmModule.forFeature([NewEntity])`
-
-### Example DTOs
-
-```typescript
-import { IsString, IsNumber, IsOptional } from 'class-validator';
-
-export class CreateProductDto {
-  @IsString()
-  tipo_prenda: string;
-
-  @IsString()
-  categoria: string;
-
-  @IsNumber()
-  precio: number;
-
-  @IsOptional()
-  @IsString()
-  descripcion?: string;
-}
-```
-
-## 🔐 Required Environment Variables
-
-```env
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=password
-DB_NAME=labshop
-
-# Environment
-NODE_ENV=development
-PORT=3000
-
-# Google Gemini
-GOOGLE_API_KEY=your_api_key
-
-# Twilio
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+number
-
-# AWS RDS (Optional)
-RDS_HOSTNAME=your_host
-RDS_PORT=5432
-RDS_DB_NAME=labshop
-RDS_USERNAME=admin
-RDS_PASSWORD=password
-```
-
-## 📊 Response Structure
-
-### Success Response
-```json
-{
-  "statusCode": 200,
-  "message": "Success",
-  "data": { }
-}
-```
-
-### Error Response
-```json
-{
-  "statusCode": 400,
-  "message": "Error message",
-  "error": "BadRequest"
-}
-```
+## Database Diagram
+![Ddbb](./src/assets/ddbb.png)
 
 ## 🚀 Deployment
 
@@ -420,40 +202,15 @@ RDS_PASSWORD=password
 2. RDS for PostgreSQL
 3. Configure environment variables in Elastic Beanstalk
 
-## 🐛 Troubleshooting
+## Evidence
+![Evidence](./src//assets/evidence.png)
 
-### Issue: "Cannot find module '@nestjs/core'"
-**Solution:** Run `npm install`
+## Test Number
 
-### Issue: "Database connection failed"
-**Solution:** Verify that PostgreSQL is running and credentials in `.env` are correct
-
-### Issue: "API Key not found"
-**Solution:** Make sure `GOOGLE_API_KEY` is configured in `.env`
-
-## 📝 Development Notes
-
-- The project uses a global `ValidationPipe` to validate all DTOs
-- Production logs only show errors
-- Body parser is configured for JSON and URL-encoded
-- TypeORM automatically generates tables if they don't exist
+```
++1 (415) 523-8886
+```
 
 ## 👨‍💻 Author
 
 **Omar Manias** - [@omanias](https://github.com/omanias)
-
-## 📄 License
-
-This project is under the UNLICENSED license
-
-## 🤝 Contributions
-
-Contributions are welcome. For major changes, please open an issue first to discuss the proposed changes.
-
-## 📞 Support
-
-For support, open an issue in the repository or contact the developer.
-
----
-
-**Last updated:** November 2025
