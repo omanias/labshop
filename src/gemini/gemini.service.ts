@@ -7,6 +7,7 @@ import { Product } from '../entities/product.entity';
 @Injectable()
 export class GeminiService {
     private readonly ai: GoogleGenAI;
+    private readonly REQUEST_TIMEOUT = 30000; // 30 segundos timeout
 
     constructor(
         private readonly productsService: ProductsService,
@@ -18,29 +19,64 @@ export class GeminiService {
     }
 
     async generateText(prompt: string): Promise<string> {
-        const response = await this.ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
+        try {
+            console.log('[GEMINI] Calling API with prompt length:', prompt.length);
 
-        return response.text ?? '';
+            const response = await this.ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+
+            if (!response) {
+                console.error('[GEMINI] ❌ Empty response from API');
+                return 'Lo siento, no pude procesar tu solicitud. Intenta de nuevo.';
+            }
+
+            if (!response.text) {
+                console.error('[GEMINI] ❌ No text in response. Full response:', JSON.stringify(response));
+                return 'Lo siento, no pude procesar tu solicitud. Intenta de nuevo.';
+            }
+
+            console.log('[GEMINI] ✅ Response received, length:', response.text.length);
+            return response.text;
+        } catch (error: any) {
+            console.error('[GEMINI] ❌ API Error:', {
+                message: error.message,
+                code: error.code,
+                status: error.status,
+                details: error.details,
+            });
+
+            // Handle specific error types
+            if (error.message?.includes('quota')) {
+                return 'He alcanzado el límite de solicitudes. Intenta en unos minutos.';
+            }
+            if (error.message?.includes('timeout')) {
+                return 'La solicitud tardó demasiado. Intenta de nuevo.';
+            }
+
+            return 'Lo siento, no pude procesar tu solicitud. Intenta de nuevo.';
+        }
     }
 
     async queryProducts(query: string): Promise<{ response: string; products: Product[] }> {
-        const allProducts = await this.productsService.findAll();
+        try {
+            console.log('[GEMINI] queryProducts called with:', query.substring(0, 100));
 
-        if (allProducts.length === 0) {
-            return {
-                response: 'Disculpa, en este momento no tengo productos disponibles en el catálogo.',
-                products: [],
-            };
-        }
+            const allProducts = await this.productsService.findAll();
 
-        const productsContext = allProducts
-            .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precio 50u: $${p.precio_50_u} | Disponible: ${p.disponible}`)
-            .join('\n');
+            if (allProducts.length === 0) {
+                return {
+                    response: 'Disculpa, en este momento no tengo productos disponibles en el catálogo.',
+                    products: [],
+                };
+            }
 
-        const enhancedPrompt = `Eres un asistente de ventas BREVE. Aquí está el catálogo de productos disponibles:
+            const productsContext = allProducts
+                .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precio 50u: $${p.precio_50_u} | Disponible: ${p.disponible}`)
+                .join('\n');
+
+            const enhancedPrompt = `Eres un asistente de ventas BREVE. Aquí está el catálogo de productos disponibles:
 
 ${productsContext}
 
@@ -51,37 +87,57 @@ Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
 2. Una breve explicación (1-2 líneas)
 3. AL FINAL, incluye esta línea exactamente: "PRODUCT_IDS: [id1, id2, id3, ...]" con los IDs de los productos recomendados.`;
 
-        const response = await this.generateText(enhancedPrompt);
+            const response = await this.generateText(enhancedPrompt);
 
-        // Extraer los IDs de productos de la respuesta
-        const idMatch = response.match(/PRODUCT_IDS:\s*\[([^\]]+)\]/);
-        let recommendedProducts: Product[] = [];
+            if (!response || response.length === 0) {
+                console.warn('[GEMINI] Empty response from generateText');
+                return {
+                    response: 'No pude procesar tu consulta. Intenta de nuevo.',
+                    products: [],
+                };
+            }
 
-        if (idMatch) {
-            const ids = idMatch[1]
-                .split(',')
-                .map((id) => parseInt(id.trim(), 10))
-                .filter((id) => !isNaN(id));
+            // Extraer los IDs de productos de la respuesta
+            const idMatch = response.match(/PRODUCT_IDS:\s*\[([^\]]+)\]/);
+            let recommendedProducts: Product[] = [];
 
-            recommendedProducts = allProducts.filter((p) => ids.includes(p.id));
-        } else {
-            const queryLower = query.toLowerCase();
-            recommendedProducts = allProducts
-                .filter(
-                    (p) =>
-                        p.tipo_prenda.toLowerCase().includes(queryLower) ||
-                        p.color.toLowerCase().includes(queryLower) ||
-                        p.categoria.toLowerCase().includes(queryLower),
-                )
-                .slice(0, 5);
+            if (idMatch) {
+                const ids = idMatch[1]
+                    .split(',')
+                    .map((id) => parseInt(id.trim(), 10))
+                    .filter((id) => !isNaN(id));
+
+                recommendedProducts = allProducts.filter((p) => ids.includes(p.id));
+                console.log('[GEMINI] Extracted product IDs:', ids);
+            } else {
+                const queryLower = query.toLowerCase();
+                recommendedProducts = allProducts
+                    .filter(
+                        (p) =>
+                            p.tipo_prenda.toLowerCase().includes(queryLower) ||
+                            p.color.toLowerCase().includes(queryLower) ||
+                            p.categoria.toLowerCase().includes(queryLower),
+                    )
+                    .slice(0, 5);
+                console.log('[GEMINI] No explicit IDs found, using fallback matching');
+            }
+
+            const cleanedResponse = response.replace(/PRODUCT_IDS:\s*\[([^\]]+)\]/g, '').trim();
+
+            return {
+                response: cleanedResponse,
+                products: recommendedProducts,
+            };
+        } catch (error: any) {
+            console.error('[GEMINI] Error in queryProducts:', {
+                message: error.message,
+                stack: error.stack,
+            });
+            return {
+                response: 'Ocurrió un error al procesar tu solicitud. Intenta de nuevo.',
+                products: [],
+            };
         }
-
-        const cleanedResponse = response.replace(/PRODUCT_IDS:\s*\[([^\]]+)\]/g, '').trim();
-
-        return {
-            response: cleanedResponse,
-            products: recommendedProducts,
-        };
     }
 
     async processPurchaseIntent(query: string, quantity: number = 1): Promise<{ response: string; cart: any }> {

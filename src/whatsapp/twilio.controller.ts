@@ -24,6 +24,7 @@ export class TwilioController {
     @Post()
     async receiveMessage(@Body() body: any, @Res() res: Response) {
         try {
+            console.log('[WHATSAPP][INCOMING] ========== NEW MESSAGE ==========');
             console.log('[WHATSAPP][INCOMING] Body received:', JSON.stringify(body, null, 2));
 
             const parsedMessage = this.twilioService.parseWebhook(body);
@@ -35,6 +36,8 @@ export class TwilioController {
             }
 
             const { from, text } = parsedMessage;
+            console.log('[WHATSAPP][INCOMING] Parsed message from:', from, 'Text:', text);
+
             const textLower = text.toLowerCase();
 
             const purchaseKeywords = ['comprar', 'quiero', 'necesito', 'voy a', 'dame', 'llevo', 'agregar', 'añadir', 'llevar', 'ordena', 'pedir'];
@@ -54,6 +57,8 @@ export class TwilioController {
             let finalReply = '';
             let cartData = null;
 
+            console.log('[WHATSAPP][INCOMING] Intent detection:', { hasPurchaseIntent, isCartModification, cartIdFromText });
+
             if (isCartModification && cartIdFromText) {
                 console.log('[WHATSAPP][INCOMING] Cart modification detected for cart #', cartIdFromText);
                 const editResult = await this.geminiService.editCart(cartIdFromText, text);
@@ -62,6 +67,8 @@ export class TwilioController {
 
                 if (cartData) {
                     console.log('[WHATSAPP][INCOMING] ✅ Cart updated successfully');
+                } else {
+                    console.warn('[WHATSAPP][INCOMING] ⚠️ editCart did not return cart data');
                 }
             } else if (hasPurchaseIntent) {
                 console.log('[WHATSAPP][INCOMING] Purchase intent detected, processing...');
@@ -71,10 +78,17 @@ export class TwilioController {
 
                 if (cartData) {
                     console.log('[WHATSAPP][INCOMING] Cart created successfully:', (cartData as any).id);
+                } else {
+                    console.warn('[WHATSAPP][INCOMING] ⚠️ processPurchaseIntent did not return cart data');
                 }
             } else {
+                console.log('[WHATSAPP][INCOMING] Query detected, fetching products...');
                 const { response, products } = await this.geminiService.queryProducts(text);
                 finalReply = response || 'No tengo respuesta 😅';
+
+                if (response && response.length === 0) {
+                    console.warn('[WHATSAPP][INCOMING] ⚠️ Empty response from queryProducts');
+                }
 
                 if (products && products.length > 0) {
                     finalReply += '\n\n📦 ';
@@ -87,16 +101,22 @@ export class TwilioController {
                 }
             }
 
+            if (!finalReply || finalReply.length === 0) {
+                console.error('[WHATSAPP][INCOMING] ❌ Final reply is empty!');
+                finalReply = 'Lo siento, no pude procesar tu solicitud. Intenta de nuevo.';
+            }
+
             if (finalReply.length > 1500) {
                 finalReply = finalReply.substring(0, 1497) + '...';
             }
 
-            console.log('[CONTROLLER] Final message to send:', finalReply);
-            console.log('[CONTROLLER] Cart data:', cartData);
+            console.log('[CONTROLLER] Final message to send:', finalReply.substring(0, 100) + '...');
+            console.log('[CONTROLLER] Cart data:', cartData ? 'Yes' : 'No');
 
             try {
+                console.log('[WHATSAPP][INCOMING] Sending message to:', from);
                 await this.twilioService.sendWhatsappMessage(from, finalReply);
-                console.log('[WHATSAPP][INCOMING] Message sent successfully to:', from);
+                console.log('[WHATSAPP][INCOMING] ✅ Message sent successfully to:', from);
             } catch (sendError: any) {
                 console.error('[WHATSAPP][INCOMING] ❌ Error sending message:', {
                     message: sendError.message,
@@ -105,9 +125,10 @@ export class TwilioController {
             }
 
             res.type('text/xml');
+            console.log('[WHATSAPP][INCOMING] ========== END MESSAGE ==========');
             return res.send(this.twilioService.generateWebhookResponse());
         } catch (e: any) {
-            console.error('[WHATSAPP][ERROR] General error:', {
+            console.error('[WHATSAPP][ERROR] ========== GENERAL ERROR ==========', {
                 message: e.message,
                 stack: e.stack,
             });
