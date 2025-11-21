@@ -39,9 +39,8 @@ export class GeminiController {
     async editCart(
         @Param('cartId', ParseIntPipe) cartId: number,
         @Body('query') query: string,
-        @Body('updates') updates?: { product_id: number; qty: number }[],
     ) {
-        const result = await this.geminiService.editCart(cartId, query, updates);
+        const result = await this.geminiService.editCart(cartId, query);
         return result;
     }
 }
