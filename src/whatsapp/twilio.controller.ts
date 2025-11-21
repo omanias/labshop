@@ -23,6 +23,7 @@ export class TwilioController {
 
     @Post()
     async receiveMessage(@Body() body: any, @Res() res: Response) {
+        const startTime = Date.now();
         try {
             console.log('[WHATSAPP][INCOMING] ========== NEW MESSAGE ==========');
             console.log('[WHATSAPP][INCOMING] Body received:', JSON.stringify(body, null, 2));
@@ -59,49 +60,38 @@ export class TwilioController {
 
             console.log('[WHATSAPP][INCOMING] Intent detection:', { hasPurchaseIntent, isCartModification, cartIdFromText });
 
-            if (isCartModification && cartIdFromText) {
-                console.log('[WHATSAPP][INCOMING] Cart modification detected for cart #', cartIdFromText);
-                const editResult = await this.geminiService.editCart(cartIdFromText, text);
-                finalReply = editResult.response || 'No tengo respuesta 😅';
-                cartData = editResult.cart;
-
-                if (cartData) {
-                    console.log('[WHATSAPP][INCOMING] ✅ Cart updated successfully');
+            try {
+                if (isCartModification && cartIdFromText) {
+                    console.log('[WHATSAPP][INCOMING] Cart modification detected for cart #', cartIdFromText);
+                    const editResult = await this.geminiService.editCart(cartIdFromText, text);
+                    finalReply = editResult.response;
+                    cartData = editResult.cart;
+                } else if (hasPurchaseIntent) {
+                    console.log('[WHATSAPP][INCOMING] Purchase intent detected, processing...');
+                    const purchaseResult = await this.geminiService.processPurchaseIntent(text, 1);
+                    finalReply = purchaseResult.response;
+                    cartData = purchaseResult.cart;
                 } else {
-                    console.warn('[WHATSAPP][INCOMING] ⚠️ editCart did not return cart data');
-                }
-            } else if (hasPurchaseIntent) {
-                console.log('[WHATSAPP][INCOMING] Purchase intent detected, processing...');
-                const purchaseResult = await this.geminiService.processPurchaseIntent(text, 1);
-                finalReply = purchaseResult.response || 'No tengo respuesta 😅';
-                cartData = purchaseResult.cart;
+                    console.log('[WHATSAPP][INCOMING] Query detected, fetching products...');
+                    const { response, products } = await this.geminiService.queryProducts(text);
+                    finalReply = response;
 
-                if (cartData) {
-                    console.log('[WHATSAPP][INCOMING] Cart created successfully:', (cartData as any).id);
-                } else {
-                    console.warn('[WHATSAPP][INCOMING] ⚠️ processPurchaseIntent did not return cart data');
+                    if (products && products.length > 0) {
+                        finalReply += '\n\n📦 ';
+                        products.forEach((p, i) => {
+                            if (i < 3) {
+                                finalReply += `${p.tipo_prenda} ${p.talla} (${p.color}) $${p.precio_50_u} | `;
+                            }
+                        });
+                        finalReply = finalReply.slice(0, -3);
+                    }
                 }
-            } else {
-                console.log('[WHATSAPP][INCOMING] Query detected, fetching products...');
-                const { response, products } = await this.geminiService.queryProducts(text);
-                finalReply = response || 'No tengo respuesta 😅';
-
-                if (response && response.length === 0) {
-                    console.warn('[WHATSAPP][INCOMING] ⚠️ Empty response from queryProducts');
-                }
-
-                if (products && products.length > 0) {
-                    finalReply += '\n\n📦 ';
-                    products.forEach((p, i) => {
-                        if (i < 3) {
-                            finalReply += `${p.tipo_prenda} ${p.talla} (${p.color}) $${p.precio_50_u} | `;
-                        }
-                    });
-                    finalReply = finalReply.slice(0, -3);
-                }
+            } catch (serviceError: any) {
+                console.error('[WHATSAPP][ERROR] Service processing error:', serviceError);
+                finalReply = 'Lo siento, tuve un problema interno al procesar tu solicitud. ¿Podrías intentar de nuevo?';
             }
 
-            if (!finalReply || finalReply.length === 0) {
+            if (!finalReply || finalReply.trim().length === 0) {
                 console.error('[WHATSAPP][INCOMING] ❌ Final reply is empty!');
                 finalReply = 'Lo siento, no pude procesar tu solicitud. Intenta de nuevo.';
             }
@@ -111,7 +101,7 @@ export class TwilioController {
             }
 
             console.log('[CONTROLLER] Final message to send:', finalReply.substring(0, 100) + '...');
-            console.log('[CONTROLLER] Cart data:', cartData ? 'Yes' : 'No');
+            console.log('[CONTROLLER] Processing time:', Date.now() - startTime, 'ms');
 
             try {
                 console.log('[WHATSAPP][INCOMING] Sending message to:', from);

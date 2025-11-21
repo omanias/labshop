@@ -241,7 +241,6 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
     async editCart(
         cartId: number,
         query: string,
-        updates?: { product_id: number; qty: number }[],
     ): Promise<{ response: string; cart: any }> {
         try {
             console.log('[GEMINI] Editing cart:', { cartId, query });
@@ -255,178 +254,102 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
                 };
             }
 
-            console.log('[GEMINI] Current cart items:', currentCart.items.map(i => ({
-                productId: i.productId,
-                tipo_prenda: i.product.tipo_prenda,
-                color: i.product.color,
-                talla: i.product.talla,
-                qty: i.qty
-            })));
+            const cartContext = currentCart.items
+                .map((item) => `- ID: ${item.productId} | ${item.product.tipo_prenda} (${item.product.color}, ${item.product.talla}) | Cantidad: ${item.qty}`)
+                .join('\n');
+
+            const prompt = `
+Eres un asistente inteligente que gestiona un carrito de compras.
+Tu trabajo es interpretar la intención del usuario y devolver una respuesta estructurada en JSON.
+
+ESTADO ACTUAL DEL CARRITO:
+${cartContext}
+
+SOLICITUD DEL USUARIO: "${query}"
+
+INSTRUCCIONES:
+1. Analiza si el usuario quiere ELIMINAR un producto o CAMBIAR LA CANTIDAD.
+2. Identifica qué producto (por ID o descripción) y la nueva cantidad (si aplica).
+3. Si quiere eliminar, la cantidad es 0.
+4. Si no entiendes la solicitud o no coincide con ningún producto, marca "action" como "NONE".
+
+Debes responder ÚNICAMENTE con un JSON válido con este formato:
+{
+  "action": "UPDATE" | "NONE",
+  "updates": [
+    {
+      "product_id": number,
+      "qty": number
+    }
+  ],
+  "reasoning": "Breve explicación de qué entendiste"
+}
+`;
+
+            const llmResponse = await this.generateText(prompt);
+            console.log('[GEMINI] LLM Response for editCart:', llmResponse);
+
+            const jsonMatch = llmResponse.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                console.warn('[GEMINI] Could not parse JSON from LLM response');
+                return {
+                    response: 'No entendí bien qué quieres cambiar en el carrito. ¿Podrías repetirlo?',
+                    cart: currentCart,
+                };
+            }
+
+            const parsedAction = JSON.parse(jsonMatch[0]);
+
+            if (parsedAction.action === 'NONE' || !parsedAction.updates || parsedAction.updates.length === 0) {
+                return {
+                    response: 'No estoy seguro de a qué producto te refieres. ¿Podrías ser más específico?',
+                    cart: currentCart,
+                };
+            }
 
             let newItems = [...currentCart.items.map((item) => ({
                 product_id: item.productId,
                 qty: item.qty,
             }))];
 
-            if (updates && updates.length > 0) {
-                newItems = updates;
-            } else {
-                const queryLower = query.toLowerCase();
+            for (const update of parsedAction.updates) {
+                const existingItemIndex = newItems.findIndex(i => i.product_id === update.product_id);
 
-                // Check for removal requests
-                const removeKeywords = ['elimina', 'quita', 'remove', 'borra', 'borrar', 'delete', 'saca', 'quito', 'elimino', 'sacá'];
-                const isRemoveRequest = removeKeywords.some(keyword => queryLower.includes(keyword));
-
-                if (isRemoveRequest) {
-                    console.log('[GEMINI] Remove request detected');
-
-                    // Try to match by product ID first
-                    const idMatch = queryLower.match(/(?:id|producto|prenda)[\s:]*(\d+)/);
-                    if (idMatch) {
-                        const productId = parseInt(idMatch[1], 10);
-                        console.log('[GEMINI] Removing by product ID:', productId);
-                        newItems = newItems.filter((item) => item.product_id !== productId);
+                if (update.qty <= 0) {
+                    if (existingItemIndex >= 0) {
+                        newItems.splice(existingItemIndex, 1);
+                    }
+                } else {
+                    if (existingItemIndex >= 0) {
+                        newItems[existingItemIndex].qty = update.qty;
                     } else {
-                        // Try to match by product description (tipo_prenda, color, talla)
-                        console.log('[GEMINI] Attempting to match by description');
-
-                        for (const cartItem of currentCart.items) {
-                            const product = cartItem.product;
-                            const productLower = product.tipo_prenda.toLowerCase();
-                            const colorLower = product.color.toLowerCase();
-                            const tallaLower = product.talla.toLowerCase();
-
-                            console.log('[GEMINI] Checking match:', {
-                                query: queryLower,
-                                tipo_prenda: productLower,
-                                color: colorLower,
-                                talla: tallaLower
-                            });
-
-                            // Check if product type and at least one more attribute match
-                            const tipoMatches = queryLower.includes(productLower);
-                            const colorMatches = queryLower.includes(colorLower);
-                            const tallaMatches = queryLower.includes(tallaLower);
-
-                            if (tipoMatches && (colorMatches || tallaMatches)) {
-                                console.log('[GEMINI] Match found! Removing product ID:', product.id);
-                                newItems = newItems.filter((item) => item.product_id !== product.id);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Check for quantity change requests
-                const quantityKeywords = ['cambiar', 'cantidad', 'actualiz', 'más', 'menos', 'aumenta', 'disminuye', 'reduce'];
-                const isQuantityRequest = quantityKeywords.some(keyword => queryLower.includes(keyword));
-
-                if (isQuantityRequest) {
-                    console.log('[GEMINI] Quantity change request detected');
-
-                    // Look for pattern like "de X a Y" or just a number
-                    const quantityPatterns = [
-                        /de\s+(\d+)\s+a\s+(\d+)/,  // "de 2 a 3"
-                        /cantidad\s+(\d+)/,        // "cantidad 2"
-                        /(\d+)\s+unidad/,          // "2 unidades"
-                        /cambiar.*?(\d+)/,         // "cambiar 2"
-                        /actualiz.*?(\d+)/,        // "actualizar 2"
-                    ];
-
-                    let newQuantity: number | null = null;
-                    let isRangeMatch = false;
-
-                    for (const pattern of quantityPatterns) {
-                        const match = queryLower.match(pattern);
-                        if (match) {
-                            if (match.length === 3 && pattern.source.includes('de')) {
-                                // Range pattern: de X a Y
-                                newQuantity = parseInt(match[2], 10);
-                                isRangeMatch = true;
-                                break;
-                            } else if (match.length === 2) {
-                                // Single number pattern
-                                newQuantity = parseInt(match[1], 10);
-                                break;
-                            }
-                        }
-                    }
-
-                    if (newQuantity && newQuantity > 0) {
-                        // Try to match product by description
-                        for (const cartItem of currentCart.items) {
-                            const product = cartItem.product;
-
-                            if (queryLower.includes(product.tipo_prenda.toLowerCase()) ||
-                                queryLower.includes(product.color.toLowerCase())) {
-                                console.log('[GEMINI] Quantity match found for product ID:', product.id, 'New qty:', newQuantity);
-                                const itemIndex = newItems.findIndex((item) => item.product_id === product.id);
-                                if (itemIndex >= 0) {
-                                    newItems[itemIndex].qty = newQuantity;
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                const qtyMatch = queryLower.match(/cambiar?.*?cantidad|de (\d+).*?a (\d+)|(\d+).*?en lugar de|cantidad de (\d+)/);
-                if (qtyMatch) {
-                    const detailedMatch = queryLower.match(/product[o]?\s+(\d+).*?(\d+)/);
-                    if (detailedMatch) {
-                        const productId = parseInt(detailedMatch[1], 10);
-                        const newQty = parseInt(detailedMatch[2], 10);
-                        const itemIndex = newItems.findIndex((item) => item.product_id === productId);
-                        if (itemIndex >= 0) {
-                            newItems[itemIndex].qty = newQty;
-                        }
-                    }
-                }
-
-                const addMatch = queryLower.match(/agrega|añad[ei]|add.*?(\d+)/);
-                if (addMatch && !queryLower.includes('cantidad')) {
-                    const productId = parseInt(addMatch[1], 10);
-                    const existingItem = newItems.find((item) => item.product_id === productId);
-                    if (existingItem) {
-                        existingItem.qty += 1;
-                    } else {
-                        newItems.push({ product_id: productId, qty: 1 });
+                        console.warn('[GEMINI] LLM tried to update item not in cart:', update.product_id);
                     }
                 }
             }
-
-            console.log('[GEMINI] New items after processing:', newItems);
 
             const updatedCart = await this.cartsService.updateCart(cartId, { items: newItems });
             const updatedCartDetail = await this.cartsService.getCartDetail(cartId);
 
-            if (!updatedCart) {
-                return {
-                    response: 'Error al actualizar el carrito.',
-                    cart: null,
-                };
-            }
-
             const responseText = `
-✅ **¡Carrito actualizado correctamente!**
+✅ **¡Carrito actualizado!**
 
-**ID del Carrito: #${updatedCartDetail.id}**
-
-**Tu carrito ahora contiene:**
+${updatedCartDetail.items.length === 0 ? 'Tu carrito está vacío.' : '**Tu carrito ahora contiene:**'}
 ${updatedCartDetail.items.map((item) => `- ${item.product.tipo_prenda} (${item.product.color}) - Cantidad: ${item.qty} - $${item.subtotal.toFixed(2)}`).join('\n')}
 
 **Total: $${updatedCartDetail.total.toFixed(2)}**
 
-¿Hay algo más que quieras modificar?`;
+¿Algo más?`;
 
             return {
                 response: responseText,
                 cart: updatedCartDetail,
             };
+
         } catch (error) {
             console.error('[GEMINI] Error editing cart:', error);
             return {
-                response: `Error al actualizar tu carrito: ${error.message}`,
+                response: 'Ocurrió un problema al actualizar tu carrito. Intenta de nuevo.',
                 cart: null,
             };
         }
