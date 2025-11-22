@@ -26,23 +26,39 @@ export class TwilioService {
             const recipientNumber = `whatsapp:+${to.replace(/\D/g, '')}`;
             const isDev = process.env.NODE_ENV !== 'production';
 
+            console.log('[TWILIO] Attempting to send message to:', recipientNumber);
+            console.log('[TWILIO] Message length:', text.length);
+            console.log('[TWILIO] Message preview:', text.substring(0, 100));
+
             const message = await this.twilioClient.messages.create({
                 from: this.whatsappNumber,
                 to: recipientNumber,
                 body: text,
             });
 
-            if (isDev) {
-                console.log('[TWILIO] Message sent:', message.sid);
+            console.log('[TWILIO] Message created with SID:', message.sid);
+            console.log('[TWILIO] Message status:', message.status);
+            console.log('[TWILIO] Error code:', message.errorCode);
+            console.log('[TWILIO] Error message:', message.errorMessage);
+            console.log('[TWILIO] Full response:', JSON.stringify(message, null, 2));
+
+            if (message.errorCode) {
+                console.error('[TWILIO] ❌ Message has error code:', message.errorCode);
+                console.error('[TWILIO] ❌ Error details:', message.errorMessage);
             }
 
             return {
                 success: true,
                 sid: message.sid,
                 status: message.status,
+                errorCode: message.errorCode,
+                errorMessage: message.errorMessage,
             };
         } catch (error: any) {
-            console.error('[TWILIO] Send error:', error.message);
+            console.error('[TWILIO] ❌ Send error:', error.message);
+            console.error('[TWILIO] ❌ Error code:', error.code);
+            console.error('[TWILIO] ❌ Error status:', error.status);
+            console.error('[TWILIO] ❌ Full error:', JSON.stringify(error, null, 2));
             throw error;
         }
     }
