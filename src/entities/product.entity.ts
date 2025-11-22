@@ -43,4 +43,15 @@ export class Product {
 
     @OneToMany(() => CartItem, (item) => item.product)
     cartItems: CartItem[];
+
+
+    getPriceForQuantity(qty: number): number {
+        if (qty >= 200) {
+            return Number(this.precio_200_u);
+        } else if (qty >= 100) {
+            return Number(this.precio_100_u);
+        } else {
+            return Number(this.precio_50_u);
+        }
+    }
 }

@@ -176,7 +176,8 @@ export class CartsService {
         }
 
         const itemsDetail = cart.items.map((item) => {
-            const subtotal = Number(item.product.precio_50_u) * item.qty;
+            const precioUnitario = item.product.getPriceForQuantity(item.qty);
+            const subtotal = precioUnitario * item.qty;
             return {
                 id: item.id,
                 productId: item.productId,
@@ -185,7 +186,7 @@ export class CartsService {
                     tipo_prenda: item.product.tipo_prenda,
                     talla: item.product.talla,
                     color: item.product.color,
-                    precio_unitario: Number(item.product.precio_50_u),
+                    precio_unitario: precioUnitario,
                     cantidad_disponible: item.product.cantidad_disponible,
                 },
                 qty: item.qty,

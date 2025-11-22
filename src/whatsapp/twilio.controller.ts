@@ -51,7 +51,7 @@ export class TwilioController {
                     finalReply += '\n\n📦 ';
                     result.products.forEach((p, i) => {
                         if (i < 3) {
-                            finalReply += `${p.tipo_prenda} ${p.talla} (${p.color}) $${p.precio_50_u} | `;
+                            finalReply += `${p.tipo_prenda} ${p.talla} (${p.color}) - Precios: 1-99u=$${p.precio_50_u}, 100-199u=$${p.precio_100_u}, 200+u=$${p.precio_200_u} | `;
                         }
                     });
                     finalReply = finalReply.slice(0, -3);

@@ -123,7 +123,7 @@ export class GeminiService {
             }
 
             const productsContext = allProducts
-                .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precio 50u: $${p.precio_50_u} | Disponible: ${p.disponible}`)
+                .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precios: 1-99u=$${p.precio_50_u}, 100-199u=$${p.precio_100_u}, 200+u=$${p.precio_200_u} | Disponible: ${p.disponible}`)
                 .join('\n');
 
             const enhancedPrompt = `Eres un asistente de ventas amigable y útil para una tienda de ropa. 
@@ -247,7 +247,7 @@ Responde en español, sé conciso y profesional.`;
 **ID del Carrito: #${cartDetail?.id}**
 
 He agregado ${products.length} producto(s) a tu carrito:
-${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Precio: $${p.precio_50_u} x ${quantity}`).join('\n')}
+${products.map((p) => `- ${p.tipo_prenda} (${p.color}, Talla: ${p.talla}) - Precio: $${p.getPriceForQuantity(quantity)} x ${quantity}`).join('\n')}
 
 **Total de artículos:** ${cartItems.length}
 **Total de compra: $${cartDetail?.total.toFixed(2)}**
@@ -331,7 +331,7 @@ Por favor, responde sobre sus productos en el carrito de manera clara y útil. S
 
             const allProducts = await this.productsService.findAll();
             const productsContext = allProducts
-                .map((p) => `ID: ${p.id} | ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Precio: $${p.precio_50_u}`)
+                .map((p) => `ID: ${p.id} | ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Precios: 1-99u=$${p.precio_50_u}, 100-199u=$${p.precio_100_u}, 200+u=$${p.precio_200_u}`)
                 .join('\n');
 
             const prompt = `
