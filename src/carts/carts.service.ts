@@ -85,12 +85,17 @@ export class CartsService {
             throw new NotFoundException('Cart not found');
         }
 
-        await this.cartItemRepo.delete({ cartId: id });
+        if (!dto.items || dto.items.length === 0) {
+            throw new BadRequestException('Items array cannot be empty');
+        }
 
-        const positiveItems = dto.items.filter((i) => i.qty > 0);
+        // Separate items to update/add vs items to remove (qty <= 0)
+        const itemsToProcess = dto.items.filter((i) => i.qty > 0);
+        const itemsToRemove = dto.items.filter((i) => i.qty <= 0);
 
-        if (positiveItems.length > 0) {
-            const productIds = [...new Set(positiveItems.map((i) => i.product_id))];
+        // Validate products exist and have stock
+        if (itemsToProcess.length > 0) {
+            const productIds = [...new Set(itemsToProcess.map((i) => i.product_id))];
             const products = await this.productRepo.find({
                 where: { id: In(productIds) },
                 select: ['id', 'cantidad_disponible', 'disponible'],
@@ -100,7 +105,7 @@ export class CartsService {
                 throw new NotFoundException('Some products not found');
             }
 
-            for (const item of positiveItems) {
+            for (const item of itemsToProcess) {
                 const product = products.find((p) => p.id === item.product_id);
                 if (!product || !product.disponible) {
                     throw new BadRequestException(
@@ -113,15 +118,38 @@ export class CartsService {
                     );
                 }
             }
+        }
 
-            const newItems = positiveItems.map((i) =>
-                this.cartItemRepo.create({
+        // Remove items with qty <= 0
+        for (const itemToRemove of itemsToRemove) {
+            await this.cartItemRepo.delete({
+                cartId: id,
+                productId: itemToRemove.product_id,
+            });
+        }
+
+        // Update or create items with qty > 0
+        for (const itemData of itemsToProcess) {
+            const existingItem = await this.cartItemRepo.findOne({
+                where: {
                     cartId: id,
-                    productId: i.product_id,
-                    qty: i.qty,
-                }),
-            );
-            await this.cartItemRepo.save(newItems);
+                    productId: itemData.product_id,
+                },
+            });
+
+            if (existingItem) {
+                // Update existing item
+                existingItem.qty = itemData.qty;
+                await this.cartItemRepo.save(existingItem);
+            } else {
+                // Create new item
+                const newItem = this.cartItemRepo.create({
+                    cartId: id,
+                    productId: itemData.product_id,
+                    qty: itemData.qty,
+                });
+                await this.cartItemRepo.save(newItem);
+            }
         }
 
         return this.cartRepo.findOne({

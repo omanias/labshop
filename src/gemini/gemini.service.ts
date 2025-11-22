@@ -76,16 +76,31 @@ export class GeminiService {
                 .map((p) => `ID: ${p.id} | Tipo: ${p.tipo_prenda} | Talla: ${p.talla} | Color: ${p.color} | Categoria: ${p.categoria} | Descripcion: ${p.descripcion} | Precio 50u: $${p.precio_50_u} | Disponible: ${p.disponible}`)
                 .join('\n');
 
-            const enhancedPrompt = `Eres un asistente de ventas BREVE. Aquí está el catálogo de productos disponibles:
+            const enhancedPrompt = `Eres un asistente de ventas amigable y útil para una tienda de ropa. 
 
+CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${productsContext}
 
-El cliente pregunta: "${query}"
+PREGUNTA DEL CLIENTE: "${query}"
 
-Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
-1. Recomienda productos relevantes del catálogo
-2. Una breve explicación (1-2 líneas)
-3. AL FINAL, incluye esta línea exactamente: "PRODUCT_IDS: [id1, id2, id3, ...]" con los IDs de los productos recomendados.`;
+INSTRUCCIONES:
+1. Si la pregunta es sobre productos específicos (ej: "¿qué camisas tienen?", "tienen pantalones?"):
+   - Recomienda productos relevantes del catálogo
+   - Sé BREVE (máximo 80 palabras)
+   - AL FINAL incluye: "PRODUCT_IDS: [id1, id2, id3, ...]" con los IDs recomendados
+
+2. Si es una pregunta general (ej: "¿cómo compro?", "¿hacen envíos?", "¿cuál es el horario?"):
+   - Responde de forma útil y amigable
+   - Máximo 60 palabras
+   - NO incluyas PRODUCT_IDS
+   - Orienta al cliente sobre cómo usar el sistema
+
+3. Si es un saludo o conversación casual:
+   - Responde cordialmente
+   - Ofrece ayuda
+   - NO incluyas PRODUCT_IDS
+
+Responde en español, sé conciso y profesional.`;
 
             const response = await this.generateText(enhancedPrompt);
 
@@ -110,16 +125,24 @@ Por favor (MÁXIMO 100 palabras, SÉ CONCISO):
                 recommendedProducts = allProducts.filter((p) => ids.includes(p.id));
                 console.log('[GEMINI] Extracted product IDs:', ids);
             } else {
+                // Fallback: si no hay IDs explícitos, buscar por palabras clave
                 const queryLower = query.toLowerCase();
-                recommendedProducts = allProducts
-                    .filter(
-                        (p) =>
-                            p.tipo_prenda.toLowerCase().includes(queryLower) ||
-                            p.color.toLowerCase().includes(queryLower) ||
-                            p.categoria.toLowerCase().includes(queryLower),
-                    )
-                    .slice(0, 5);
-                console.log('[GEMINI] No explicit IDs found, using fallback matching');
+                const productKeywords = ['camisa', 'pantalon', 'remera', 'buzo', 'medias', 'producto'];
+                const hasProductKeyword = productKeywords.some(kw => queryLower.includes(kw));
+
+                if (hasProductKeyword) {
+                    recommendedProducts = allProducts
+                        .filter(
+                            (p) =>
+                                p.tipo_prenda.toLowerCase().includes(queryLower) ||
+                                p.color.toLowerCase().includes(queryLower) ||
+                                p.categoria.toLowerCase().includes(queryLower),
+                        )
+                        .slice(0, 5);
+                    console.log('[GEMINI] No explicit IDs found, using fallback matching');
+                } else {
+                    console.log('[GEMINI] General query detected, no product filtering');
+                }
             }
 
             const cleanedResponse = response.replace(/PRODUCT_IDS:\s*\[([^\]]+)\]/g, '').trim();
@@ -351,6 +374,121 @@ ${updatedCartDetail.items.map((item) => `- ${item.product.tipo_prenda} (${item.p
             return {
                 response: 'Ocurrió un problema al actualizar tu carrito. Intenta de nuevo.',
                 cart: null,
+            };
+        }
+    }
+
+    /**
+     * Intelligent message processor that uses Gemini to understand user intent
+     * and route to the appropriate handler
+     */
+    async processUserMessage(message: string): Promise<{
+        response: string;
+        cart?: any;
+        products?: Product[];
+    }> {
+        try {
+            console.log('[GEMINI] Processing user message:', message.substring(0, 100));
+
+            // First, use Gemini to detect intent
+            const intentPrompt = `Eres un asistente inteligente que analiza mensajes de clientes de una tienda de ropa.
+
+MENSAJE DEL CLIENTE: "${message}"
+
+Analiza el mensaje y determina la INTENCIÓN principal. Responde ÚNICAMENTE con un JSON válido:
+
+{
+  "intent": "QUERY_PRODUCTS" | "CREATE_CART" | "MODIFY_CART" | "VIEW_CART" | "GENERAL_QUESTION" | "GREETING",
+  "cart_id": number | null,
+  "reasoning": "breve explicación"
+}
+
+INTENCIONES:
+- QUERY_PRODUCTS: Pregunta sobre productos disponibles (ej: "¿qué camisas tienen?")
+- CREATE_CART: Quiere comprar/agregar productos (ej: "quiero 2 camisas azules", "comprar pantalones")
+- MODIFY_CART: Quiere modificar un carrito existente (ej: "elimina el producto 1 del carrito #8", "cambia cantidad")
+- VIEW_CART: Quiere ver su carrito (ej: "muéstrame mi carrito #8", "qué tengo en el carrito")
+- GENERAL_QUESTION: Pregunta general sobre la tienda (ej: "¿cómo compro?", "hacen envíos?")
+- GREETING: Saludo o conversación casual (ej: "hola", "gracias")
+
+Si menciona un número de carrito con # o "carrito", extrae el cart_id.`;
+
+            const intentResponse = await this.generateText(intentPrompt);
+            console.log('[GEMINI] Intent analysis:', intentResponse);
+
+            // Parse intent
+            const jsonMatch = intentResponse.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                console.warn('[GEMINI] Could not parse intent JSON, defaulting to query');
+                return await this.queryProducts(message);
+            }
+
+            const intent = JSON.parse(jsonMatch[0]);
+            console.log('[GEMINI] Detected intent:', intent);
+
+            // Route based on intent
+            switch (intent.intent) {
+                case 'CREATE_CART':
+                    const purchaseResult = await this.processPurchaseIntent(message, 1);
+                    return {
+                        response: purchaseResult.response,
+                        cart: purchaseResult.cart,
+                    };
+
+                case 'MODIFY_CART':
+                    if (!intent.cart_id) {
+                        return {
+                            response: 'Para modificar tu carrito, necesito el número de carrito. Por favor menciona el carrito con #número (ej: carrito #8)',
+                        };
+                    }
+                    const editResult = await this.editCart(intent.cart_id, message);
+                    return {
+                        response: editResult.response,
+                        cart: editResult.cart,
+                    };
+
+                case 'VIEW_CART':
+                    if (!intent.cart_id) {
+                        return {
+                            response: 'Para ver tu carrito, necesito el número. Por favor menciona el carrito con #número (ej: carrito #8)',
+                        };
+                    }
+                    const cartDetail = await this.cartsService.getCartDetail(intent.cart_id);
+                    const cartMessage = `
+🛒 **Carrito #${cartDetail.id}**
+
+${cartDetail.items.length === 0 ? 'Tu carrito está vacío.' : '**Productos:**'}
+${cartDetail.items.map((item) => `- ${item.product.tipo_prenda} (${item.product.color}, Talla: ${item.product.talla}) x${item.qty} - $${item.subtotal.toFixed(2)}`).join('\n')}
+
+**Total: $${cartDetail.total.toFixed(2)}**
+**Cantidad de items: ${cartDetail.itemCount}**
+
+¿Deseas modificar algo?`;
+                    return {
+                        response: cartMessage,
+                        cart: cartDetail,
+                    };
+
+                case 'QUERY_PRODUCTS':
+                    const queryResult = await this.queryProducts(message);
+                    return {
+                        response: queryResult.response,
+                        products: queryResult.products,
+                    };
+
+                case 'GENERAL_QUESTION':
+                case 'GREETING':
+                default:
+                    const generalResult = await this.queryProducts(message);
+                    return {
+                        response: generalResult.response,
+                        products: generalResult.products,
+                    };
+            }
+        } catch (error: any) {
+            console.error('[GEMINI] Error processing user message:', error);
+            return {
+                response: 'Ocurrió un error al procesar tu mensaje. ¿Podrías intentar de nuevo?',
             };
         }
     }
