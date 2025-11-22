@@ -43,12 +43,10 @@ export class TwilioController {
             let cartData = null;
 
             try {
-                // Use Gemini's intelligent message processor
-                const result = await this.geminiService.processUserMessage(text);
+                const result = await this.geminiService.processUserMessage(text, from);
                 finalReply = result.response;
                 cartData = result.cart;
 
-                // If there are products, add them to the response
                 if (result.products && result.products.length > 0) {
                     finalReply += '\n\n📦 ';
                     result.products.forEach((p, i) => {

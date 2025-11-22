@@ -77,12 +77,10 @@ export class TwilioService {
                 return null;
             }
 
-            // Decode UTF-8 properly (Twilio sends Latin-1 encoded UTF-8)
             try {
                 text = Buffer.from(text, 'latin1').toString('utf8');
             } catch (decodeError) {
                 console.warn('[TWILIO] UTF-8 decode warning:', decodeError);
-                // Keep original text if decode fails
             }
 
             return {

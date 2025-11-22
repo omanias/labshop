@@ -89,11 +89,9 @@ export class CartsService {
             throw new BadRequestException('Items array cannot be empty');
         }
 
-        // Separate items to update/add vs items to remove (qty <= 0)
         const itemsToProcess = dto.items.filter((i) => i.qty > 0);
         const itemsToRemove = dto.items.filter((i) => i.qty <= 0);
 
-        // Validate products exist and have stock
         if (itemsToProcess.length > 0) {
             const productIds = [...new Set(itemsToProcess.map((i) => i.product_id))];
             const products = await this.productRepo.find({
@@ -120,7 +118,6 @@ export class CartsService {
             }
         }
 
-        // Remove items with qty <= 0
         for (const itemToRemove of itemsToRemove) {
             await this.cartItemRepo.delete({
                 cartId: id,
@@ -128,7 +125,6 @@ export class CartsService {
             });
         }
 
-        // Update or create items with qty > 0
         for (const itemData of itemsToProcess) {
             const existingItem = await this.cartItemRepo.findOne({
                 where: {
@@ -138,11 +134,9 @@ export class CartsService {
             });
 
             if (existingItem) {
-                // Update existing item
                 existingItem.qty = itemData.qty;
                 await this.cartItemRepo.save(existingItem);
             } else {
-                // Create new item
                 const newItem = this.cartItemRepo.create({
                     cartId: id,
                     productId: itemData.product_id,
